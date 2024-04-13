@@ -1,5 +1,12 @@
 # completesnakegameai
 
+Dependencies:
+
+```
+sudo dnf install python3-pip python3-numpy python3-pygame python3-ipython
+pip3 install torch
+```
+
 Structure of repo:
 
 ```

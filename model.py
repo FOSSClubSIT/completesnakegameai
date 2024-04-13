@@ -32,7 +32,7 @@ class QTrainer:
         self.optimizer = optim.Adam(model.parameters(), lr=self.lr)
         self.criterion = nn.MSELoss()
 
-    def train_step(self, state, action, reward, next_state, done):
+    def train_step(self, state, action, reward, next_state, done, steps_to_food, steps_to_food_new):
         state = torch.tensor(state, dtype=torch.float)
         next_state = torch.tensor(next_state, dtype=torch.float)
         action = torch.tensor(action, dtype=torch.long)
@@ -54,6 +54,7 @@ class QTrainer:
         for idx in range(len(done)):
             Q_new = reward[idx]
             if not done[idx]:
+                Q_new += 5 if steps_to_food > steps_to_food_new else 0
                 Q_new = reward[idx] + self.gamma * torch.max(self.model(next_state[idx]))
 
             target[idx][torch.argmax(action[idx]).item()] = Q_new

@@ -2,8 +2,9 @@ import torch
 import random
 import numpy as np
 from collections import deque
+from queue import Queue
 from game_ai import SnakeGameAI, Direction, Point
-from inference import Linear_QNet, QTrainer
+from model import Linear_QNet, QTrainer
 from plot import plot
 
 MAX_MEMORY = 100_000
@@ -19,6 +20,32 @@ class Agent:
         self.memory = deque(maxlen=MAX_MEMORY) # popleft()
         self.model = Linear_QNet(11, 256, 3)
         self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
+
+    def bfs(self, start, game):
+        visited = set()
+        q = Queue()
+        q.put((start, 0))
+        visited.add(start)
+        food_point = Point(game.food.x, game.food.y)  # Create a Point object for food coordinates
+        while not q.empty():
+            current, steps = q.get()
+            if current == food_point:  # Check if current point is equal to food_point
+                return steps
+            for direction in [Direction.UP.value, Direction.DOWN.value, Direction.LEFT.value, Direction.RIGHT.value]:
+                if direction == Direction.UP.value:
+                    new_point = Point(current.x, current.y - 20)
+                elif direction == Direction.DOWN.value:
+                    new_point = Point(current.x, current.y + 20)
+                elif direction == Direction.LEFT.value:
+                    new_point = Point(current.x - 20, current.y)
+                elif direction == Direction.RIGHT.value:
+                    new_point = Point(current.x + 20, current.y)
+                if not game.is_collision(new_point) and new_point not in visited:
+                    q.put((new_point, steps + 1))
+                    visited.add(new_point)
+        return float('inf')
+
+
 
 
     def get_state(self, game):
@@ -67,8 +94,8 @@ class Agent:
 
         return np.array(state, dtype=int)
 
-    def remember(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done)) # popleft if MAX_MEMORY is reached
+    def remember(self, state, action, reward, next_state, done, steps_to_food, steps_to_food_new):
+        self.memory.append((state, action, reward, next_state, done, steps_to_food, steps_to_food_new)) # popleft if MAX_MEMORY is reached
 
     def train_long_memory(self):
         if len(self.memory) > BATCH_SIZE:
@@ -76,13 +103,13 @@ class Agent:
         else:
             mini_sample = self.memory
 
-        states, actions, rewards, next_states, dones = zip(*mini_sample)
-        self.trainer.train_step(states, actions, rewards, next_states, dones)
+        states, actions, rewards, next_states, dones, steps_to_food, steps_to_food_new = zip(*mini_sample)
+        self.trainer.train_step(states, actions, rewards, next_states, dones, steps_to_food, steps_to_food_new)
         #for state, action, reward, nexrt_state, done in mini_sample:
         #    self.trainer.train_step(state, action, reward, next_state, done)
 
-    def train_short_memory(self, state, action, reward, next_state, done):
-        self.trainer.train_step(state, action, reward, next_state, done)
+    def train_short_memory(self, state, action, reward, next_state, done, steps_to_food, steps_to_food_new):
+        self.trainer.train_step(state, action, reward, next_state, done, steps_to_food, steps_to_food_new)
 
     def get_action(self, state):
         # random moves: tradeoff exploration / exploitation
@@ -110,6 +137,8 @@ def train():
     while True:
         # get old state
         state_old = agent.get_state(game)
+        
+        steps_to_food = agent.bfs(game.snake[0], game)
 
         # get move
         final_move = agent.get_action(state_old)
@@ -118,11 +147,13 @@ def train():
         reward, done, score = game.play_step(final_move)
         state_new = agent.get_state(game)
 
+        steps_to_food_new = agent.bfs(game.snake[0], game)
+
         # train short memory
-        agent.train_short_memory(state_old, final_move, reward, state_new, done)
+        agent.train_short_memory(state_old, final_move, reward, state_new, done, steps_to_food, steps_to_food_new)
 
         # remember
-        agent.remember(state_old, final_move, reward, state_new, done)
+        agent.remember(state_old, final_move, reward, state_new, done, steps_to_food, steps_to_food_new)
 
         if done:
             # train long memory, plot result

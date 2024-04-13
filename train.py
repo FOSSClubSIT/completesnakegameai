@@ -6,6 +6,7 @@ from queue import Queue
 from game_ai import SnakeGameAI, Direction, Point
 from model import Linear_QNet, QTrainer
 from plot import plot
+import multiprocessing
 
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000

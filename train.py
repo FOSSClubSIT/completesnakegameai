@@ -173,6 +173,33 @@ def train():
             plot_mean_scores.append(mean_score)
             plot(plot_scores, plot_mean_scores)
 
+def calculate_mean_scores(score_queue):
+    total_score = 0
+    num_agents = 5
+    while True:
+        score = score_queue.get()
+        total_score += score
+        if score_queue.qsize() == num_agents:
+            mean_score = total_score / num_agents
+            # Train long memory with the mean score from all agents
+            for x in range(num_agents):
+                agent.train_long_memory(mean_score)
+            total_score = 0
 
 if __name__ == '__main__':
-    train()
+    num_agents = 5
+    processes = []
+    for i in range(num_agents):
+        process = multiprocessing.Process(target=train, args=(i+1,))
+        processes.append(process)
+        process.start()
+
+    mean_process = multiprocessing.Process(target=calculate_mean_scores, args=(score_queue,))
+    mean_process.start()
+
+    # Wait for all processes to finish
+    for process in processes:
+        process.join()
+
+    # Terminate the mean process
+    mean_process.terminate()

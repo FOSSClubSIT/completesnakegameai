@@ -7,6 +7,8 @@ from game_ai import SnakeGameAI, Direction, Point
 from model import Linear_QNet, QTrainer
 from plot import plot
 import multiprocessing
+from agent_module import Agent
+
 
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
@@ -171,7 +173,7 @@ def train():
             total_score += score
             mean_score = total_score / agent.n_games
             plot_mean_scores.append(mean_score)
-            plot(plot_scores, plot_mean_scores)
+           # plot(plot_scores, plot_mean_scores)
 
 def calculate_mean_scores(score_queue):
     total_score = 0
@@ -188,6 +190,7 @@ def calculate_mean_scores(score_queue):
 
 if __name__ == '__main__':
     num_agents = 5
+    score_queue = multiprocessing.Queue()
     processes = []
     for i in range(num_agents):
         process = multiprocessing.Process(target=train, args=(i+1,))

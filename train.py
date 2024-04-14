@@ -6,21 +6,22 @@ from queue import Queue
 from game_ai import SnakeGameAI, Direction, Point
 from model import Linear_QNet, QTrainer
 from plot import plot
+import multiprocessing as mp
 
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
 LR = 0.001
-NUM_INSTANCES = 5  # Number of game instances to run simultaneously
 
 class Agent:
 
-    def __init__(self):
+    def __init__(self, shared_mean_score):
         self.n_games = 0
         self.epsilon = 0 # randomness
         self.gamma = 0.9 # discount rate
         self.memory = deque(maxlen=MAX_MEMORY) # popleft()
         self.model = Linear_QNet(11, 256, 3)
         self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
+        self.shared_mean_score = shared_mean_score
 
     def bfs(self, start, game):
         visited = set()
@@ -104,6 +105,11 @@ class Agent:
         states, actions, rewards, next_states, dones, steps_to_food, steps_to_food_new = zip(*mini_sample)
         self.trainer.train_step(states, actions, rewards, next_states, dones, steps_to_food, steps_to_food_new)
 
+        # Calculate mean score and store it
+        mean_score = sum(self.shared_mean_score) / len(self.shared_mean_score)
+        print("Mean score:", mean_score)
+        self.trainer.train_step(states, actions, rewards, next_states, dones, steps_to_food, steps_to_food_new, mean_score)
+
     def train_short_memory(self, state, action, reward, next_state, done, steps_to_food, steps_to_food_new):
         self.trainer.train_step(state, action, reward, next_state, done, steps_to_food, steps_to_food_new)
 
@@ -124,58 +130,33 @@ class Agent:
 
         return final_move
 
-def train():
-    plot_scores = []
-    plot_mean_scores = []
-    total_score = 0
-    record = 0
-    agent = Agent()
-    games = [SnakeGameAI() for _ in range(NUM_INSTANCES)]  # Create multiple game instances
+def run_game(agent_id, agent, shared_mean_score):
+    game = SnakeGameAI()
     while True:
-        scores = []
-        for game in games:
-            # get old state
-            state_old = agent.get_state(game)
+        state_old = agent.get_state(game)
+        steps_to_food = agent.bfs(game.snake[0], game)
+        final_move = agent.get_action(state_old)
+        reward, done, _ = game.play_step(final_move)
+        state_new = agent.get_state(game)
+        steps_to_food_new = agent.bfs(game.snake[0], game)
+        agent.train_short_memory(state_old, final_move, reward, state_new, done, steps_to_food, steps_to_food_new)
+        agent.remember(state_old, final_move, reward, state_new, done, steps_to_food, steps_to_food_new)
+        if done:
+            game.reset()
+            agent.n_games += 1
+            agent.train_long_memory()
+            shared_mean_score.append(game.score)  # Store mean score for this episode
 
-            steps_to_food = agent.bfs(game.snake[0], game)
-
-            # get move
-            final_move = agent.get_action(state_old)
-
-            # perform move and get new state
-            reward, done, score = game.play_step(final_move)
-            state_new = agent.get_state(game)
-
-            steps_to_food_new = agent.bfs(game.snake[0], game)
-
-            # train short memory
-            agent.train_short_memory(state_old, final_move, reward, state_new, done, steps_to_food, steps_to_food_new)
-
-            # remember
-            agent.remember(state_old, final_move, reward, state_new, done, steps_to_food, steps_to_food_new)
-
-            scores.append(score)
-
-            if done:
-                agent.n_games += 1
-
-                if score > record:
-                    record = score
-                    print("Model.pth updated")
-                    agent.model.save()
-
-                print('Game', agent.n_games, 'Score', score, 'Record:', record)
-
-        mean_score = np.mean(scores)
-        plot_scores.extend(scores)
-        total_score += mean_score
-
-        # Train long memory with mean score
-        agent.train_long_memory()
-
-        # Calculate and plot mean score
-        plot_mean_scores.append(total_score / len(games))
-        plot(plot_scores, plot_mean_scores)
+def train():
+    shared_mean_score = mp.Manager().list()  # Shared list to store mean scores
+    processes = []
+    for i in range(5):
+        agent = Agent(shared_mean_score)
+        process = mp.Process(target=run_game, args=(i, agent, shared_mean_score))
+        process.start()
+        processes.append(process)
+    for process in processes:
+        process.join()
 
 if __name__ == '__main__':
     train()

@@ -1,10 +1,19 @@
 # completesnakegameai
 
-Dependencies:
+Dependencies (Fedora):
 
 ```
-sudo dnf install python3-pip python3-numpy python3-pygame python3-ipython
+sudo dnf install python3 python3-pip python3-numpy python3-pygame python3-ipython
 pip3 install torch
+```
+
+Dependencies (Windows):
+Install VC_Redist 2015-19 from [here](https://aka.ms/vs/16/release/vc_redist.x64.exe).
+Open a Windows Terminal instance.
+
+```
+winget install python
+pip install torch matplotlib numpy pygame
 ```
 
 Structure of repo:

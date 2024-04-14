@@ -10,6 +10,7 @@ from plot import plot
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
 LR = 0.001
+NUM_INSTANCES = 5  # Number of game instances to run simultaneously
 
 class Agent:
 
@@ -44,9 +45,6 @@ class Agent:
                     q.put((new_point, steps + 1))
                     visited.add(new_point)
         return float('inf')
-
-
-
 
     def get_state(self, game):
         head = game.snake[0]
@@ -105,8 +103,6 @@ class Agent:
 
         states, actions, rewards, next_states, dones, steps_to_food, steps_to_food_new = zip(*mini_sample)
         self.trainer.train_step(states, actions, rewards, next_states, dones, steps_to_food, steps_to_food_new)
-        #for state, action, reward, nexrt_state, done in mini_sample:
-        #    self.trainer.train_step(state, action, reward, next_state, done)
 
     def train_short_memory(self, state, action, reward, next_state, done, steps_to_food, steps_to_food_new):
         self.trainer.train_step(state, action, reward, next_state, done, steps_to_food, steps_to_food_new)
@@ -128,53 +124,58 @@ class Agent:
 
         return final_move
 
-
 def train():
     plot_scores = []
     plot_mean_scores = []
     total_score = 0
     record = 0
     agent = Agent()
-    game = SnakeGameAI()
+    games = [SnakeGameAI() for _ in range(NUM_INSTANCES)]  # Create multiple game instances
     while True:
-        # get old state
-        state_old = agent.get_state(game)
-        
-        steps_to_food = agent.bfs(game.snake[0], game)
+        scores = []
+        for game in games:
+            # get old state
+            state_old = agent.get_state(game)
 
-        # get move
-        final_move = agent.get_action(state_old)
+            steps_to_food = agent.bfs(game.snake[0], game)
 
-        # perform move and get new state
-        reward, done, score = game.play_step(final_move)
-        state_new = agent.get_state(game)
+            # get move
+            final_move = agent.get_action(state_old)
 
-        steps_to_food_new = agent.bfs(game.snake[0], game)
+            # perform move and get new state
+            reward, done, score = game.play_step(final_move)
+            state_new = agent.get_state(game)
 
-        # train short memory
-        agent.train_short_memory(state_old, final_move, reward, state_new, done, steps_to_food, steps_to_food_new)
+            steps_to_food_new = agent.bfs(game.snake[0], game)
 
-        # remember
-        agent.remember(state_old, final_move, reward, state_new, done, steps_to_food, steps_to_food_new)
+            # train short memory
+            agent.train_short_memory(state_old, final_move, reward, state_new, done, steps_to_food, steps_to_food_new)
 
-        if done:
-            # train long memory, plot result
-            game.reset()
-            agent.n_games += 1
-            agent.train_long_memory()
+            # remember
+            agent.remember(state_old, final_move, reward, state_new, done, steps_to_food, steps_to_food_new)
 
-            if score > record:
-                record = score
-                print("Model.pth updated")
-                agent.model.save()
+            scores.append(score)
 
-            print('Game', agent.n_games, 'Score', score, 'Record:', record)
-            plot_scores.append(score)
-            total_score += score
-            mean_score = total_score / agent.n_games
-            plot_mean_scores.append(mean_score)
-            plot(plot_scores, plot_mean_scores)
+            if done:
+                agent.n_games += 1
 
+                if score > record:
+                    record = score
+                    print("Model.pth updated")
+                    agent.model.save()
+
+                print('Game', agent.n_games, 'Score', score, 'Record:', record)
+
+        mean_score = np.mean(scores)
+        plot_scores.extend(scores)
+        total_score += mean_score
+
+        # Train long memory with mean score
+        agent.train_long_memory()
+
+        # Calculate and plot mean score
+        plot_mean_scores.append(total_score / len(games))
+        plot(plot_scores, plot_mean_scores)
 
 if __name__ == '__main__':
     train()

@@ -9,7 +9,7 @@ from plot import plot
 
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
-LR = 0.001
+LR = 0.01
 
 class Agent:
 
@@ -94,8 +94,8 @@ class Agent:
 
         return np.array(state, dtype=int)
 
-    def remember(self, state, action, reward, next_state, done, steps_to_food, steps_to_food_new):
-        self.memory.append((state, action, reward, next_state, done, steps_to_food, steps_to_food_new)) # popleft if MAX_MEMORY is reached
+    def remember(self, state, action, reward, next_state, done, steps_to_food, steps_to_food_new, danger_old, danger_new):
+        self.memory.append((state, action, reward, next_state, done, steps_to_food, steps_to_food_new, danger_old, danger_new)) # popleft if MAX_MEMORY is reached
 
     def train_long_memory(self):
         if len(self.memory) > BATCH_SIZE:
@@ -103,13 +103,13 @@ class Agent:
         else:
             mini_sample = self.memory
 
-        states, actions, rewards, next_states, dones, steps_to_food, steps_to_food_new = zip(*mini_sample)
-        self.trainer.train_step(states, actions, rewards, next_states, dones, steps_to_food, steps_to_food_new)
+        states, actions, rewards, next_states, dones, steps_to_food, steps_to_food_new, dangers_old, dangers_new= zip(*mini_sample)
+        self.trainer.train_step(states, actions, rewards, next_states, dones, steps_to_food, steps_to_food_new, dangers_old, dangers_new)
         #for state, action, reward, nexrt_state, done in mini_sample:
         #    self.trainer.train_step(state, action, reward, next_state, done)
 
-    def train_short_memory(self, state, action, reward, next_state, done, steps_to_food, steps_to_food_new):
-        self.trainer.train_step(state, action, reward, next_state, done, steps_to_food, steps_to_food_new)
+    def train_short_memory(self, state, action, reward, next_state, done, steps_to_food, steps_to_food_new, danger_old, danger_new):
+        self.trainer.train_step(state, action, reward, next_state, done, steps_to_food, steps_to_food_new, danger_old, danger_new)
 
     def get_action(self, state, model=None):
         if model is None:
@@ -127,7 +127,19 @@ class Agent:
             final_move[move] = 1
 
         return final_move
-
+    
+    def avg_danger(self, game):
+        dir_l = game.direction == Direction.LEFT
+        dir_r = game.direction == Direction.RIGHT
+        dir_u = game.direction == Direction.UP
+        dir_d = game.direction == Direction.DOWN
+    
+        d_straight= game.danger_distance(game.direction)
+        d_right= game.danger_distance(Direction.UP) if dir_l else game.danger_distance(Direction.DOWN) if dir_r else game.danger_distance(Direction.RIGHT) if dir_u else game.danger_distance(Direction.LEFT)
+        d_left=  game.danger_distance(Direction.DOWN) if dir_l else game.danger_distance(Direction.UP) if dir_r else game.danger_distance(Direction.LEFT) if dir_u else game.danger_distance(Direction.RIGHT)
+        if d_straight<8 or d_left<8 or d_right<8:
+            return min(d_straight, d_left, d_right)
+        return 20
 
 def train():
     plot_scores = []
@@ -141,6 +153,7 @@ def train():
         state_old = agent.get_state(game)
         
         steps_to_food = agent.bfs(game.snake[0], game)
+        danger_old=agent.avg_danger(game)
 
         # get move
         final_move = agent.get_action(state_old)
@@ -150,12 +163,13 @@ def train():
         state_new = agent.get_state(game)
 
         steps_to_food_new = agent.bfs(game.snake[0], game)
+        danger_new=agent.avg_danger(game)
 
         # train short memory
-        agent.train_short_memory(state_old, final_move, reward, state_new, done, steps_to_food, steps_to_food_new)
+        agent.train_short_memory(state_old, final_move, reward, state_new, done, steps_to_food, steps_to_food_new, danger_old, danger_new)
 
         # remember
-        agent.remember(state_old, final_move, reward, state_new, done, steps_to_food, steps_to_food_new)
+        agent.remember(state_old, final_move, reward, state_new, done, steps_to_food, steps_to_food_new, danger_old, danger_new)
 
         if done:
             # train long memory, plot result

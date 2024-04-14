@@ -6,7 +6,6 @@ from queue import Queue
 from game_ai import SnakeGameAI, Direction, Point
 from model import Linear_QNet, QTrainer
 from plot import plot
-import multiprocessing
 
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
@@ -112,7 +111,9 @@ class Agent:
     def train_short_memory(self, state, action, reward, next_state, done, steps_to_food, steps_to_food_new):
         self.trainer.train_step(state, action, reward, next_state, done, steps_to_food, steps_to_food_new)
 
-    def get_action(self, state):
+    def get_action(self, state, model=None):
+        if model is None:
+            model=self.model
         # random moves: tradeoff exploration / exploitation
         self.epsilon = 80 - self.n_games
         final_move = [0,0,0]
@@ -121,7 +122,7 @@ class Agent:
             final_move[move] = 1
         else:
             state0 = torch.tensor(state, dtype=torch.float)
-            prediction = self.model(state0)
+            prediction = model(state0)
             move = torch.argmax(prediction).item()
             final_move[move] = 1
 
@@ -164,6 +165,7 @@ def train():
 
             if score > record:
                 record = score
+                print("Model.pth updated")
                 agent.model.save()
 
             print('Game', agent.n_games, 'Score', score, 'Record:', record)
@@ -173,33 +175,6 @@ def train():
             plot_mean_scores.append(mean_score)
             plot(plot_scores, plot_mean_scores)
 
-def calculate_mean_scores(score_queue):
-    total_score = 0
-    num_agents = 5
-    while True:
-        score = score_queue.get()
-        total_score += score
-        if score_queue.qsize() == num_agents:
-            mean_score = total_score / num_agents
-            # Train long memory with the mean score from all agents
-            for x in range(num_agents):
-                agent.train_long_memory(mean_score)
-            total_score = 0
 
 if __name__ == '__main__':
-    num_agents = 5
-    processes = []
-    for i in range(num_agents):
-        process = multiprocessing.Process(target=train, args=(i+1,))
-        processes.append(process)
-        process.start()
-
-    mean_process = multiprocessing.Process(target=calculate_mean_scores, args=(score_queue,))
-    mean_process.start()
-
-    # Wait for all processes to finish
-    for process in processes:
-        process.join()
-
-    # Terminate the mean process
-    mean_process.terminate()
+    train()

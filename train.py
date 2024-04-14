@@ -7,6 +7,7 @@ from game_ai import SnakeGameAI, Direction, Point
 from model import Linear_QNet, QTrainer
 from plot import plot
 import multiprocessing as mp
+import subprocess
 
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
@@ -130,33 +131,14 @@ class Agent:
 
         return final_move
 
-def run_game(agent_id, agent, shared_mean_score):
-    game = SnakeGameAI()
-    while True:
-        state_old = agent.get_state(game)
-        steps_to_food = agent.bfs(game.snake[0], game)
-        final_move = agent.get_action(state_old)
-        reward, done, _ = game.play_step(final_move)
-        state_new = agent.get_state(game)
-        steps_to_food_new = agent.bfs(game.snake[0], game)
-        agent.train_short_memory(state_old, final_move, reward, state_new, done, steps_to_food, steps_to_food_new)
-        agent.remember(state_old, final_move, reward, state_new, done, steps_to_food, steps_to_food_new)
-        if done:
-            game.reset()
-            agent.n_games += 1
-            agent.train_long_memory()
-            shared_mean_score.append(game.score)  # Store mean score for this episode
+def run_game():
+    subprocess.Popen(['xterm', '-e', 'python', 'train.py'])
 
 def train():
     shared_mean_score = mp.Manager().list()  # Shared list to store mean scores
     processes = []
     for i in range(5):
-        agent = Agent(shared_mean_score)
-        process = mp.Process(target=run_game, args=(i, agent, shared_mean_score))
-        process.start()
-        processes.append(process)
-    for process in processes:
-        process.join()
+        mp.Process(target=run_game).start()
 
 if __name__ == '__main__':
     train()

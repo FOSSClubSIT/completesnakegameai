@@ -1,51 +1,43 @@
 import pygame
 import torch
-from game_ai import SnakeGameAI, Direction, Point
-from train import Agent
-import os
-import glob
+from train import Agent  
+from game_ai import SnakeGameAI, Direction
 
-# Function to find the latest model checkpoint file in a directory
-def find_latest_model_checkpoint(checkpoint_dir):
-    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, 'model.pth'))
-    if not checkpoint_files:
-        return None
-    latest_checkpoint = max(checkpoint_files, key=os.path.getctime)
-    return latest_checkpoint
 
-pygame.init()
-game = SnakeGameAI()
-checkpoint_dir = 'model'
-latest_checkpoint = find_latest_model_checkpoint(checkpoint_dir)
+def load_agent(model_path):
+    agent = Agent()
+    agent.model.load_state_dict(torch.load(model_path))
+    agent.model.eval() 
+    return agent
 
-if latest_checkpoint is None:
-    print("No model checkpoint found in the directory:", checkpoint_dir)
-    exit()
+def main():
+    pygame.init()
+    game = SnakeGameAI()  
 
-agent = Agent()
-agent.model.load_state_dict(torch.load(latest_checkpoint))
-# Set the model to evaluation mode (no gradient computation)
-agent.model.eval()
+    model_path = 'model/model.pth' 
+    agent = load_agent(model_path)
+    agent.n_games=80
 
-running = True
-clock = pygame.time.Clock()
+    running = True
+    clock = pygame.time.Clock()
 
-while running:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        game_state = agent.get_state(game)
+        action = agent.get_action(game_state, agent.model)
+        reward, game_over, score = game.play_step(action)
+
+        if game_over:
+            print("Game Over! Final Score:", score)
             running = False
+        
+        pygame.display.flip()
+        clock.tick(20)  
 
-    game_state = agent.get_state(game)
-    action = agent.get_action(game_state)
-    reward, game_over, score = game.play_step(action)
+    pygame.quit()
 
-    if game_over:
-        print("Game Over! Final Score:", score)
-        running = False
-
-    game.update_ui()
-    pygame.display.flip()
-    clock.tick(20)  
-
-
-pygame.quit()
+if __name__ == "__main__":
+    main()

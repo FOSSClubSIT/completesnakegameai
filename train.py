@@ -7,7 +7,7 @@ from game_ai import SnakeGameAI, Direction, Point
 from model import Linear_QNet, QTrainer
 from plot import plot
 import multiprocessing
-from agent_module import Agent
+#from agent_module import Agent
 
 
 MAX_MEMORY = 100_000

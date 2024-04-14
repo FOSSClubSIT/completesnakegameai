@@ -5,8 +5,7 @@ from collections import namedtuple
 import numpy as np
 
 pygame.init()
-font = pygame.font.Font('arial.ttf', 25)
-#font = pygame.font.SysFont('arial', 25)
+font = pygame.font.SysFont('arial', 25)
 
 class Direction(Enum):
     RIGHT = 1
@@ -24,7 +23,7 @@ BLUE2 = (0, 100, 255)
 BLACK = (0,0,0)
 
 BLOCK_SIZE = 20
-SPEED = 4050
+SPEED = 5000
 
 class SnakeGameAI:
 
@@ -78,13 +77,13 @@ class SnakeGameAI:
         game_over = False
         if self.is_collision() or self.frame_iteration > 100*len(self.snake):
             game_over = True
-            reward = -10
+            reward = -20
             return reward, game_over, self.score
 
         # 4. place new food or just move
         if self.head == self.food:
             self.score += 1
-            reward = 10
+            reward = 20
             self._place_food()
         else:
             self.snake.pop()
@@ -122,6 +121,26 @@ class SnakeGameAI:
         self.display.blit(text, [0, 0])
         pygame.display.flip()
 
+    def danger_distance(self, direction):
+        trig_x=self.head.x
+        trig_y=self.head.y
+        move=Point(0,0)
+        distance=0
+        if direction == Direction.LEFT:
+            move=Point(-20, 0)
+        elif direction == Direction.RIGHT:
+            move=Point(20, 0)
+        elif direction == Direction.UP:
+            move=Point(0, 20)    
+        elif direction == Direction.DOWN:
+            move=Point(0, -20)
+
+        while(not self.is_collision(Point(trig_x, trig_y))):
+            trig_x+=move.x
+            trig_y+=move.y
+            distance+=1
+
+        return distance
 
     def _move(self, action):
         # [straight, right, left]
